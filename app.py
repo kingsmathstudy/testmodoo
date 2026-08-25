@@ -157,6 +157,10 @@ class StudentCreate(BaseModel):
 class StudentUpdate(BaseModel):
     name: str
     grade: Optional[str] = ""
+    pin: Optional[str] = None
+
+class StudentVerifyPin(BaseModel):
+    pin: str
 
 @app.post("/api/students")
 def add_student(student: StudentCreate):
@@ -166,10 +170,17 @@ def add_student(student: StudentCreate):
 @app.put("/api/students/{student_id}")
 def update_student(student_id: int, student: StudentUpdate):
     try:
-        updated = sb.update_student(student_id, student.name, student.grade)
+        updated = sb.update_student(student_id, student.name, student.grade, student.pin)
         return {"id": student_id, "message": "학생 정보가 수정되었습니다.", "student": updated}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"학생 수정 실패: {str(e)}")
+
+@app.post("/api/students/{student_id}/verify-pin")
+def verify_student_pin(student_id: int, payload: StudentVerifyPin):
+    valid = sb.verify_student_pin(student_id, payload.pin)
+    if valid:
+        return {"success": True, "message": "학생 인증 성공"}
+    return {"success": False, "message": "비밀번호가 올바르지 않습니다."}
 
 @app.delete("/api/students/{student_id}")
 def delete_student(student_id: int):

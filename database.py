@@ -46,7 +46,12 @@ def init_db():
     )
     """)
 
-    # 기존 DB 스키마 마이그레이션 (image_urls 컬럼이 없는 경우 추가)
+    # 기존 DB 스키마 마이그레이션 (pin 또는 image_urls 컬럼이 없는 경우 추가)
+    cursor.execute("PRAGMA table_info(students)")
+    st_columns = [col["name"] for col in cursor.fetchall()]
+    if "pin" not in st_columns:
+        cursor.execute("ALTER TABLE students ADD COLUMN pin TEXT DEFAULT '0000'")
+
     cursor.execute("PRAGMA table_info(submissions)")
     columns = [col["name"] for col in cursor.fetchall()]
     if "image_urls" not in columns:
@@ -125,17 +130,20 @@ def add_student(name: str, grade: str = "", pin: str = "0000", avatar_color: str
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute(
         "INSERT INTO students (name, grade, pin, avatar_color, created_at) VALUES (?, ?, ?, ?, ?)",
-        (name, grade, pin, avatar_color, now)
+        (name, grade, pin or "0000", avatar_color, now)
     )
     student_id = cursor.lastrowid
     conn.commit()
     conn.close()
     return student_id
 
-def update_student(student_id: int, name: str, grade: str = ""):
+def update_student(student_id: int, name: str, grade: str = "", pin: Optional[str] = None):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE students SET name = ?, grade = ? WHERE id = ?", (name, grade, student_id))
+    if pin is not None:
+        cursor.execute("UPDATE students SET name = ?, grade = ?, pin = ? WHERE id = ?", (name, grade, pin, student_id))
+    else:
+        cursor.execute("UPDATE students SET name = ?, grade = ? WHERE id = ?", (name, grade, student_id))
     cursor.execute("UPDATE submissions SET student_name = ? WHERE student_id = ?", (name, student_id))
     conn.commit()
     conn.close()

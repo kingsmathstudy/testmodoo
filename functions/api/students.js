@@ -104,7 +104,8 @@ export async function onRequestPut(context) {
       },
       body: JSON.stringify({
         name: body.name,
-        grade: body.grade || ''
+        grade: body.grade || '',
+        ...(body.pin !== undefined ? { pin: body.pin } : {})
       })
     });
 

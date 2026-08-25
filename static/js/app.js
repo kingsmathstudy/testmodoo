@@ -6,6 +6,7 @@
 const state = {
   role: 'student', // 'student' or 'teacher'
   teacherUnlocked: false, // true once PIN verified
+  authenticatedStudentIds: JSON.parse(sessionStorage.getItem('tutormark_auth_students') || '[]'),
   students: [],
   currentStudent: null,
   submissions: [],
@@ -439,6 +440,14 @@ async function loadStudents() {
 
     state.students = Array.isArray(students) ? students : [];
 
+    // Prioritize previously authenticated student in this browser session
+    if (state.authenticatedStudentIds.length > 0) {
+      const authStudent = state.students.find(s => state.authenticatedStudentIds.includes(s.id));
+      if (authStudent) {
+        state.currentStudent = authStudent;
+      }
+    }
+
     // Re-bind the selection to the refreshed row (or the first student) so stale objects are not kept
     if (state.currentStudent) {
       const stillThere = state.students.find(s => s.id === state.currentStudent.id);
@@ -482,10 +491,31 @@ function renderStudentSelectUI() {
 function handleStudentDropdownChange(studentIdStr) {
   const id = Number(studentIdStr);
   const found = state.students.find(s => s.id === id);
-  if (found) {
-    state.currentStudent = found;
-    loadSubmissions();
+  if (!found) return;
+
+  // In student mode, require student's PIN if not yet authenticated in this session
+  if (state.role === 'student') {
+    const isAuth = state.authenticatedStudentIds.includes(found.id);
+    if (!isAuth) {
+      const pinPrompt = prompt(`'${found.name}' 학생의 비밀번호(4자리 PIN)를 입력하세요 (기본: 0000):`);
+      if (pinPrompt === null) {
+        renderStudentSelectUI();
+        return;
+      }
+      const actualPin = String(found.pin || '0000').trim();
+      if (pinPrompt.trim() !== actualPin) {
+        showToast('학생 비밀번호가 올바르지 않습니다.', 'error');
+        renderStudentSelectUI();
+        return;
+      }
+      state.authenticatedStudentIds.push(found.id);
+      sessionStorage.setItem('tutormark_auth_students', JSON.stringify(state.authenticatedStudentIds));
+      showToast(`'${found.name}' 학생으로 인증되었습니다.`, 'success');
+    }
   }
+
+  state.currentStudent = found;
+  loadSubmissions();
 }
 
 function renderStudentFilterUI() {
@@ -1587,6 +1617,22 @@ async function deleteFeedback(feedbackId) {
 }
 
 async function confirmDeleteSubmission(submissionId) {
+  // If in student mode, enforce student PIN check so student A cannot delete student B's submissions
+  if (state.role === 'student') {
+    const sub = state.submissions.find(s => s.id === submissionId);
+    const targetStudent = state.students.find(s => s.id === (sub ? sub.student_id : state.currentStudent?.id)) || state.currentStudent;
+    
+    if (targetStudent) {
+      const pinPrompt = prompt(`'${targetStudent.name}' 학생의 과제를 삭제하려면 학생 비밀번호(4자리 PIN)를 입력하세요:`);
+      if (pinPrompt === null) return;
+      const actualPin = String(targetStudent.pin || '0000').trim();
+      if (pinPrompt.trim() !== actualPin) {
+        showToast('학생 비밀번호가 일치하지 않아 삭제할 수 없습니다.', 'error');
+        return;
+      }
+    }
+  }
+
   if (!confirm('정말 이 과제와 관련된 모든 첨삭 기록을 삭제하시겠습니까?')) return;
 
   try {
@@ -1800,17 +1846,25 @@ async function promptAddStudent() {
   if (!name || !name.trim()) return;
 
   const grade = prompt('학생의 학년 또는 과목을 입력하세요 (예: 중2 수학):', '중등부') || '';
+  const pin = prompt('학생 비밀번호(4자리 PIN)를 설정하세요 (기본: 0000):', '0000') || '0000';
   const newStudent = {
     name: name.trim(),
     grade: grade.trim(),
-    pin: '0000',
+    pin: pin.trim(),
     avatar_color: ['#EC4899', '#8B5CF6', '#F59E0B', '#10B981', '#3B82F6'][Math.floor(Math.random() * 5)]
   };
 
   try {
     // 1. If Supabase Client is initialized on frontend, insert directly
     if (state.supabaseClient) {
-      const { data, error } = await state.supabaseClient.from('students').insert([newStudent]).select();
+      let { data, error } = await state.supabaseClient.from('students').insert([newStudent]).select();
+      // Fallback if 'pin' column is missing in Supabase
+      if (error && error.message && error.message.includes('pin')) {
+        delete newStudent.pin;
+        const res2 = await state.supabaseClient.from('students').insert([newStudent]).select();
+        data = res2.data;
+        error = res2.error;
+      }
       if (error) throw new Error(error.message);
       showToast(`'${name}' 학생이 등록되었습니다.`, 'success');
       await loadStudents();
@@ -1895,11 +1949,12 @@ function renderStudentManageList() {
             ${escapeHtml(s.name ? s.name.charAt(0) : '학')}
           </div>
           <div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="font-bold text-slate-900 text-sm">${escapeHtml(s.name)}</span>
               <span class="px-2 py-0.5 text-[11px] font-semibold rounded-md bg-white border border-slate-200 text-slate-600">${escapeHtml(s.grade || '학년 미지정')}</span>
+              <span class="px-2 py-0.5 text-[11px] font-bold rounded-md bg-purple-100 text-purple-700 border border-purple-200">PW: ${escapeHtml(s.pin || '0000')}</span>
             </div>
-            <p class="text-[11px] text-slate-400">제출된 과제: <span class="font-semibold text-slate-600">${subCount}</span>개</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">제출된 과제: <span class="font-semibold text-slate-600">${subCount}</span>개</p>
           </div>
         </div>
 
@@ -1932,13 +1987,25 @@ async function promptEditStudent(studentId) {
   const newGrade = prompt('학생의 학년 또는 과목을 입력하세요:', student.grade || '중등부');
   if (newGrade === null) return;
 
+  const newPin = prompt('학생의 새로운 비밀번호(4자리 PIN)를 입력하세요:', student.pin || '0000');
+  if (newPin === null) return;
+
   try {
+    const updateData = {
+      name: newName.trim(),
+      grade: newGrade.trim(),
+      pin: newPin.trim() || '0000'
+    };
+
     // 1. Supabase Client 직접 갱신
     if (state.supabaseClient) {
-      const { error } = await state.supabaseClient.from('students').update({
-        name: newName.trim(),
-        grade: newGrade.trim()
-      }).eq('id', studentId);
+      let { error } = await state.supabaseClient.from('students').update(updateData).eq('id', studentId);
+      // Fallback if 'pin' column is missing in Supabase
+      if (error && error.message && error.message.includes('pin')) {
+        delete updateData.pin;
+        const res2 = await state.supabaseClient.from('students').update(updateData).eq('id', studentId);
+        error = res2.error;
+      }
       if (error) throw new Error(error.message);
 
       // 과제 테이블의 student_name도 함께 동기화
@@ -1948,7 +2015,7 @@ async function promptEditStudent(studentId) {
       const res = await fetch(`/api/students/${studentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim(), grade: newGrade.trim() })
+        body: JSON.stringify(updateData)
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));

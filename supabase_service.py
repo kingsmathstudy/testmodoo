@@ -131,15 +131,27 @@ def add_student(name: str, grade: str = "", pin: str = "0000", avatar_color: str
         return res.data[0]["id"]
     return 0
 
-def update_student(student_id: int, name: str, grade: str = "") -> Dict[str, Any]:
+def update_student(student_id: int, name: str, grade: str = "", pin: Optional[str] = None) -> Dict[str, Any]:
     if not is_supabase_enabled():
         import database as local_db
-        return local_db.update_student(student_id, name, grade)
+        return local_db.update_student(student_id, name, grade, pin)
 
-    res = supabase_client.table("students").update({
+    update_payload = {
         "name": name,
         "grade": grade
-    }).eq("id", student_id).execute()
+    }
+    if pin is not None:
+        update_payload["pin"] = pin
+
+    try:
+        res = supabase_client.table("students").update(update_payload).eq("id", student_id).execute()
+    except Exception as e:
+        # If 'pin' column does not exist on Supabase, fallback without pin
+        if "pin" in update_payload:
+            del update_payload["pin"]
+            res = supabase_client.table("students").update(update_payload).eq("id", student_id).execute()
+        else:
+            raise e
     
     try:
         supabase_client.table("submissions").update({"student_name": name}).eq("student_id", student_id).execute()
@@ -147,6 +159,22 @@ def update_student(student_id: int, name: str, grade: str = "") -> Dict[str, Any
         print(f"[Supabase update student_name in submissions error]: {e}")
 
     return res.data[0] if res.data else {"id": student_id, "name": name, "grade": grade}
+
+def verify_student_pin(student_id: int, pin: str) -> bool:
+    if not is_supabase_enabled():
+        import database as local_db
+        st = local_db.get_student_by_id(student_id)
+        if not st:
+            return False
+        return str(st.get("pin", "0000")).strip() == str(pin).strip()
+
+    try:
+        res = supabase_client.table("students").select("id, pin").eq("id", student_id).execute()
+        if not res.data:
+            return False
+        return str(res.data[0].get("pin", "0000")).strip() == str(pin).strip()
+    except Exception:
+        return False
 
 def delete_student(student_id: int) -> Dict[str, Any]:
     if not is_supabase_enabled():
