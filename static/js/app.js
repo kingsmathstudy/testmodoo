@@ -252,6 +252,11 @@ function initUI() {
   // Escape closes the topmost open modal
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    const pinModal = document.getElementById('pin-prompt-modal');
+    if (pinModal && !pinModal.classList.contains('hidden')) {
+      closePinPromptModal();
+      return;
+    }
     if (!document.getElementById('image-lightbox-modal').classList.contains('hidden')) return; // lightbox handles itself
     if (!document.getElementById('student-manage-modal').classList.contains('hidden')) {
       closeStudentManageModal();
@@ -309,14 +314,77 @@ function getActiveSubmissionImages() {
   return sub.images && sub.images.length > 0 ? sub.images : [sub.image_url || sub.image_filename];
 }
 
+// --- Secure Password / PIN Modal Helper (Masked Input for Screen Sharing Safety) ---
+function askSecurePassword({ title = '비밀번호 입력', desc = '화면 공유 중에도 안전하게 가려집니다.', placeholder = '비밀번호 입력' } = {}) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('pin-prompt-modal');
+    const form = document.getElementById('pin-modal-form');
+    const input = document.getElementById('pin-modal-input');
+    const titleElem = document.getElementById('pin-modal-title');
+    const descElem = document.getElementById('pin-modal-desc');
+    const cancelBtn = document.getElementById('pin-modal-btn-cancel');
+
+    if (!modal || !form || !input) {
+      const fallback = prompt(`${title}\n${desc}`);
+      resolve(fallback);
+      return;
+    }
+
+    if (titleElem) titleElem.innerText = title;
+    if (descElem) descElem.innerText = desc;
+    input.placeholder = placeholder;
+    input.value = '';
+
+    modal.classList.remove('hidden');
+    setTimeout(() => input.focus(), 80);
+
+    let isResolved = false;
+
+    const cleanup = () => {
+      modal.classList.add('hidden');
+      form.removeEventListener('submit', handleSubmit);
+      cancelBtn.removeEventListener('click', handleCancel);
+    };
+
+    const handleSuccess = (val) => {
+      if (isResolved) return;
+      isResolved = true;
+      cleanup();
+      resolve(val);
+    };
+
+    const handleCancel = () => {
+      if (isResolved) return;
+      isResolved = true;
+      cleanup();
+      resolve(null);
+    };
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      handleSuccess(input.value);
+    };
+
+    form.addEventListener('submit', handleSubmit, { once: true });
+    cancelBtn.addEventListener('click', handleCancel, { once: true });
+  });
+}
+
+function closePinPromptModal() {
+  const modal = document.getElementById('pin-prompt-modal');
+  if (modal) modal.classList.add('hidden');
+  const cancelBtn = document.getElementById('pin-modal-btn-cancel');
+  if (cancelBtn) cancelBtn.click();
+}
+
 // --- Role Management ---
-function handleRoleSelectChange(role) {
+async function handleRoleSelectChange(role) {
   if (role === 'teacher') {
     if (state.teacherUnlocked) {
       switchRole('teacher');
       showToast('교사 모드로 전환되었습니다.', 'info');
     } else {
-      promptTeacherPin();
+      await promptTeacherPin();
     }
   } else {
     switchRole('student');
@@ -368,10 +436,15 @@ function switchRole(role) {
   if (window.lucide) lucide.createIcons();
 }
 
-function promptTeacherPin() {
+async function promptTeacherPin() {
   if (state.role === 'teacher') return;
   
-  const pin = prompt('선생님 모드 접속 비밀번호(PIN)를 입력하세요:');
+  const pin = await askSecurePassword({
+    title: '선생님 모드 비밀번호',
+    desc: '화면 공유 중에도 안전하게 가려집니다.',
+    placeholder: '선생님 PIN 입력'
+  });
+
   if (pin === null) {
     const roleSelect = document.getElementById('header-role-select');
     if (roleSelect) roleSelect.value = state.role;
@@ -485,7 +558,7 @@ function renderStudentSelectUI() {
   }
 }
 
-function handleStudentDropdownChange(studentIdStr) {
+async function handleStudentDropdownChange(studentIdStr) {
   const id = Number(studentIdStr);
   const found = state.students.find(s => s.id === id);
   if (!found) return;
@@ -494,7 +567,11 @@ function handleStudentDropdownChange(studentIdStr) {
   if (state.role === 'student') {
     const isAuth = state.authenticatedStudentIds.includes(found.id);
     if (!isAuth) {
-      const pinPrompt = prompt(`'${found.name}' 학생의 비밀번호(4자리 PIN)를 입력하세요 (기본: 0000):`);
+      const pinPrompt = await askSecurePassword({
+        title: `'${found.name}' 학생 비밀번호`,
+        desc: '화면 공유 중에도 안전하게 가려집니다.',
+        placeholder: '학생 4자리 PIN'
+      });
       if (pinPrompt === null) {
         renderStudentSelectUI();
         return;
@@ -1620,7 +1697,11 @@ async function confirmDeleteSubmission(submissionId) {
     const targetStudent = state.students.find(s => s.id === (sub ? sub.student_id : state.currentStudent?.id)) || state.currentStudent;
     
     if (targetStudent) {
-      const pinPrompt = prompt(`'${targetStudent.name}' 학생의 과제를 삭제하려면 학생 비밀번호(4자리 PIN)를 입력하세요:`);
+      const pinPrompt = await askSecurePassword({
+        title: `'${targetStudent.name}' 과제 삭제 확인`,
+        desc: '과제를 삭제하려면 학생 비밀번호(4자리 PIN)를 입력하세요.',
+        placeholder: '학생 비밀번호 입력'
+      });
       if (pinPrompt === null) return;
       const actualPin = String(targetStudent.pin || '0000').trim();
       if (pinPrompt.trim() !== actualPin) {

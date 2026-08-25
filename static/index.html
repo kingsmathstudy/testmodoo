@@ -644,6 +644,40 @@
     </div>
   </div>
 
+  <!-- ======================================================= -->
+  <!-- 8. PIN / PASSWORD PROMPT MODAL (화면 공유 시 마스킹 보호) -->
+  <!-- ======================================================= -->
+  <div id="pin-prompt-modal" class="hidden fixed inset-0 z-70 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 space-y-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold flex-shrink-0">
+          <i data-lucide="lock" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 id="pin-modal-title" class="font-bold text-slate-900 text-base">비밀번호 입력</h3>
+          <p id="pin-modal-desc" class="text-xs text-slate-500">화면 공유 중에도 안전하게 가려집니다.</p>
+        </div>
+      </div>
+
+      <form id="pin-modal-form" class="space-y-4 pt-1">
+        <div class="relative">
+          <input type="password" id="pin-modal-input" placeholder="비밀번호 입력"
+                 class="w-full bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-none focus:bg-white transition"
+                 autocomplete="new-password" required>
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <button type="button" id="pin-modal-btn-cancel" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition">
+            취소
+          </button>
+          <button type="submit" id="pin-modal-btn-submit" class="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition shadow-xs">
+            확인
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="/static/js/config.js"></script>
   <script src="/static/js/canvas-editor.js"></script>
