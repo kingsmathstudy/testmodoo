@@ -131,6 +131,68 @@ def add_student(name: str, grade: str = "", pin: str = "0000", avatar_color: str
         return res.data[0]["id"]
     return 0
 
+def update_student(student_id: int, name: str, grade: str = "") -> Dict[str, Any]:
+    if not is_supabase_enabled():
+        import database as local_db
+        return local_db.update_student(student_id, name, grade)
+
+    res = supabase_client.table("students").update({
+        "name": name,
+        "grade": grade
+    }).eq("id", student_id).execute()
+    
+    try:
+        supabase_client.table("submissions").update({"student_name": name}).eq("student_id", student_id).execute()
+    except Exception as e:
+        print(f"[Supabase update student_name in submissions error]: {e}")
+
+    return res.data[0] if res.data else {"id": student_id, "name": name, "grade": grade}
+
+def delete_student(student_id: int) -> Dict[str, Any]:
+    if not is_supabase_enabled():
+        import database as local_db
+        return local_db.delete_student(student_id)
+
+    # 1. 과제 및 피드백 스토리지 파일 정리
+    sub_res = supabase_client.table("submissions").select("id, image_url, image_urls").eq("student_id", student_id).execute()
+    subs = sub_res.data or []
+    sub_ids = [s["id"] for s in subs]
+    
+    storage_files_to_delete = []
+    for s in subs:
+        for u in parse_image_urls(s):
+            path = storage_path_from_url(u)
+            if path:
+                storage_files_to_delete.append(path)
+
+    if sub_ids:
+        fb_res = supabase_client.table("feedbacks").select("annotated_image_url").in_("submission_id", sub_ids).execute()
+        for f in (fb_res.data or []):
+            url = f.get("annotated_image_url")
+            if url:
+                path = storage_path_from_url(url)
+                if path:
+                    storage_files_to_delete.append(path)
+
+    if storage_files_to_delete:
+        try:
+            supabase_client.storage.from_(SUPABASE_BUCKET).remove(storage_files_to_delete)
+        except Exception as e:
+            print(f"[Supabase Storage bulk delete error on delete_student]: {e}")
+
+    if sub_ids:
+        try:
+            supabase_client.table("feedbacks").delete().in_("submission_id", sub_ids).execute()
+        except Exception:
+            pass
+        try:
+            supabase_client.table("submissions").delete().eq("student_id", student_id).execute()
+        except Exception:
+            pass
+
+    supabase_client.table("students").delete().eq("id", student_id).execute()
+    return {"success": True, "deleted_id": student_id}
+
 def create_submission(student_id: int, student_name: str, subject: str, title: str, memo: str, image_urls_list: List[str]) -> int:
     if not is_supabase_enabled():
         import database as local_db

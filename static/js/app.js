@@ -250,7 +250,9 @@ function initUI() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!document.getElementById('image-lightbox-modal').classList.contains('hidden')) return; // lightbox handles itself
-    if (!document.getElementById('supabase-guide-modal').classList.contains('hidden')) {
+    if (!document.getElementById('student-manage-modal').classList.contains('hidden')) {
+      closeStudentManageModal();
+    } else if (!document.getElementById('supabase-guide-modal').classList.contains('hidden')) {
       closeSupabaseGuideModal();
     } else if (!document.getElementById('canvas-editor-modal').classList.contains('hidden')) {
       closeCanvasEditor();
@@ -418,6 +420,7 @@ async function loadStudents() {
 
     renderStudentSelectUI();
     renderStudentFilterUI();
+    renderStudentManageList();
   } catch (err) {
     console.error('Failed to load students:', err);
   }
@@ -1801,6 +1804,7 @@ async function promptAddStudent() {
     showToast(`'${name}' 학생이 등록되었습니다.`, 'success');
     await loadStudents();
     await loadStats();
+    renderStudentManageList();
     if (created && created.id) {
       const found = state.students.find(s => s.id === created.id);
       if (found) {
@@ -1812,6 +1816,165 @@ async function promptAddStudent() {
   } catch (err) {
     console.error('Failed to add student:', err);
     showToast('학생 추가 실패: ' + err.message, 'error');
+  }
+}
+
+// --- Student Management Modal (Edit & Delete) ---
+function openStudentManageModal() {
+  if (state.role !== 'teacher') {
+    showToast('학생 관리는 교사/관리자 모드에서만 접근할 수 있습니다.', 'warning');
+    return;
+  }
+
+  const modal = document.getElementById('student-manage-modal');
+  if (!modal) return;
+
+  renderStudentManageList();
+  modal.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeStudentManageModal() {
+  const modal = document.getElementById('student-manage-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function renderStudentManageList() {
+  const container = document.getElementById('student-manage-list');
+  if (!container) return;
+
+  if (!state.students || state.students.length === 0) {
+    container.innerHTML = `
+      <div class="py-8 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+        <p class="text-sm font-medium">등록된 학생이 없습니다. [+ 새 학생 등록] 버튼으로 학생을 추가하세요.</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = state.students.map(s => {
+    const subCount = (state.submissions || []).filter(sub => sub.student_id === s.id).length;
+    return `
+      <div class="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-purple-50/40 border border-slate-200 rounded-2xl transition">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-xs flex-shrink-0" style="background-color: ${s.avatar_color || '#8B5CF6'}">
+            ${escapeHtml(s.name ? s.name.charAt(0) : '학')}
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-slate-900 text-sm">${escapeHtml(s.name)}</span>
+              <span class="px-2 py-0.5 text-[11px] font-semibold rounded-md bg-white border border-slate-200 text-slate-600">${escapeHtml(s.grade || '학년 미지정')}</span>
+            </div>
+            <p class="text-[11px] text-slate-400">제출된 과제: <span class="font-semibold text-slate-600">${subCount}</span>개</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <button onclick="promptEditStudent(${s.id})" class="px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-600 border border-slate-200 hover:border-blue-300 rounded-xl text-xs font-bold transition flex items-center gap-1">
+            <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> 수정
+          </button>
+          <button onclick="promptDeleteStudent(${s.id})" class="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 hover:border-rose-300 rounded-xl text-xs font-bold transition flex items-center gap-1">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 삭제
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  if (window.lucide) lucide.createIcons();
+}
+
+async function promptEditStudent(studentId) {
+  const student = state.students.find(s => s.id === studentId);
+  if (!student) return;
+
+  const newName = prompt('학생의 새로운 이름을 입력하세요:', student.name);
+  if (newName === null) return;
+  if (!newName.trim()) {
+    showToast('학생 이름을 입력해주세요.', 'warning');
+    return;
+  }
+
+  const newGrade = prompt('학생의 학년 또는 과목을 입력하세요:', student.grade || '중등부');
+  if (newGrade === null) return;
+
+  try {
+    // 1. Supabase Client 직접 갱신
+    if (state.supabaseClient) {
+      const { error } = await state.supabaseClient.from('students').update({
+        name: newName.trim(),
+        grade: newGrade.trim()
+      }).eq('id', studentId);
+      if (error) throw new Error(error.message);
+
+      // 과제 테이블의 student_name도 함께 동기화
+      await state.supabaseClient.from('submissions').update({ student_name: newName.trim() }).eq('student_id', studentId);
+    } else {
+      // 2. 백엔드 API
+      const res = await fetch(`/api/students/${studentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim(), grade: newGrade.trim() })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.error || '학생 수정 실패');
+      }
+    }
+
+    showToast(`'${newName.trim()}' 학생 정보가 수정되었습니다.`, 'success');
+    await loadStudents();
+    await loadSubmissions();
+    renderStudentManageList();
+  } catch (err) {
+    console.error('Failed to update student:', err);
+    showToast('학생 정보 수정 실패: ' + err.message, 'error');
+  }
+}
+
+async function promptDeleteStudent(studentId) {
+  const student = state.students.find(s => s.id === studentId);
+  if (!student) return;
+
+  const confirmMsg = `'${student.name}' 학생을 정말 삭제하시겠습니까?\n\n⚠️ 주의: 해당 학생이 제출한 모든 과제 및 첨삭 데이터도 함께 삭제됩니다.`;
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    // 1. Supabase Client 직접 삭제
+    if (state.supabaseClient) {
+      const { data: subs } = await state.supabaseClient.from('submissions').select('id').eq('student_id', studentId);
+      if (subs && subs.length > 0) {
+        const subIds = subs.map(s => s.id);
+        await state.supabaseClient.from('feedbacks').delete().in('submission_id', subIds);
+        await state.supabaseClient.from('submissions').delete().eq('student_id', studentId);
+      }
+      const { error } = await state.supabaseClient.from('students').delete().eq('id', studentId);
+      if (error) throw new Error(error.message);
+    } else {
+      // 2. 백엔드 API
+      const res = await fetch(`/api/students/${studentId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.error || '학생 삭제 실패');
+      }
+    }
+
+    showToast(`'${student.name}' 학생이 삭제되었습니다.`, 'info');
+    if (state.studentFilter === studentId) {
+      state.studentFilter = 'all';
+    }
+    if (state.currentStudent && state.currentStudent.id === studentId) {
+      state.currentStudent = null;
+    }
+
+    await loadStudents();
+    await loadSubmissions();
+    await loadStats();
+    renderStudentManageList();
+  } catch (err) {
+    console.error('Failed to delete student:', err);
+    showToast('학생 삭제 실패: ' + err.message, 'error');
   }
 }
 

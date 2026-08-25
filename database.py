@@ -132,6 +132,44 @@ def add_student(name: str, grade: str = "", pin: str = "0000", avatar_color: str
     conn.close()
     return student_id
 
+def update_student(student_id: int, name: str, grade: str = ""):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE students SET name = ?, grade = ? WHERE id = ?", (name, grade, student_id))
+    cursor.execute("UPDATE submissions SET student_name = ? WHERE student_id = ?", (name, student_id))
+    conn.commit()
+    conn.close()
+    return get_student_by_id(student_id)
+
+def delete_student(student_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # 1. 과제 및 첨삭 이미지 파일 목록 조회하여 반환 준비
+    cursor.execute("SELECT id, image_filename, image_urls FROM submissions WHERE student_id = ?", (student_id,))
+    subs = cursor.fetchall()
+    original_images = []
+    sub_ids = []
+    for s in subs:
+        sub_ids.append(s["id"])
+        original_images.extend(parse_image_urls(dict(s)))
+    
+    feedback_images = []
+    if sub_ids:
+        placeholders = ",".join("?" * len(sub_ids))
+        cursor.execute(f"SELECT annotated_image_filename FROM feedbacks WHERE submission_id IN ({placeholders})", sub_ids)
+        feedback_images = [f["annotated_image_filename"] for f in cursor.fetchall()]
+
+    # 2. SQLite Foreign Key CASCADE 활성화로 자식 레코드(submissions, feedbacks) 자동 삭제
+    cursor.execute("DELETE FROM students WHERE id = ?", (student_id,))
+    conn.commit()
+    conn.close()
+
+    return {
+        "original_images": original_images,
+        "feedback_images": feedback_images
+    }
+
 def create_submission(student_id: int, student_name: str, subject: str, title: str, memo: str, image_urls_list: List[str]):
     conn = get_db_connection()
     cursor = conn.cursor()

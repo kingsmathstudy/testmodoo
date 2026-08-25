@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>TutorMark - 과외/멘토링 사진 과제 첨삭 노트 (Supabase)</title>
+  <title>모두의 멘토링 책췍 - 사진 과제 첨삭 노트</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons CDN -->
@@ -26,11 +26,11 @@
     <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md">
-          <i data-lucide="pen-tool" class="w-5 h-5"></i>
+          <i data-lucide="book-open-check" class="w-5 h-5"></i>
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <h1 class="font-extrabold text-lg text-slate-900 tracking-tight">TutorMark</h1>
+            <h1 class="font-extrabold text-lg text-slate-900 tracking-tight">모두의 멘토링 책췍</h1>
             <span id="current-role-badge" class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
               학생 모드
             </span>
@@ -39,7 +39,7 @@
               <span>연결 확인 중...</span>
             </div>
           </div>
-          <p class="text-xs text-slate-500">줌 과외·멘토링 사진 과제 및 실시간 첨삭 피드백</p>
+          <p class="text-xs text-slate-500">학생이 책 찍고! 📸 선생님이 체크하고! ✅ 실시간 첨삭 피드백</p>
         </div>
       </div>
 
@@ -242,6 +242,9 @@
         <div class="flex items-center gap-2">
           <button onclick="promptAddStudent()" class="text-xs font-semibold text-purple-600 hover:text-purple-700 flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-purple-50 border border-purple-200 transition">
             <i data-lucide="user-plus" class="w-3.5 h-3.5"></i> 새 학생 등록
+          </button>
+          <button onclick="openStudentManageModal()" class="text-xs font-semibold text-indigo-700 hover:text-indigo-800 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition shadow-xs">
+            <i data-lucide="users" class="w-3.5 h-3.5"></i> 학생 관리 (수정/삭제)
           </button>
           <button onclick="openSupabaseGuideModal()" class="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition">
             <i data-lucide="database" class="w-3.5 h-3.5"></i> Supabase 연동 설정
@@ -617,6 +620,49 @@
     <!-- Lightbox Footer Tip -->
     <div class="text-center text-xs text-slate-400 py-1">
       <span>💡 마우스 휠로 확대/축소하거나 드래그하여 이동할 수 있습니다. (닫기: ESC 키 또는 바깥 클릭)</span>
+    </div>
+  </div>
+
+  <!-- ======================================================= -->
+  <!-- 7. STUDENT MANAGEMENT MODAL (교사용 학생 수정/삭제 관리) -->
+  <!-- ======================================================= -->
+  <div id="student-manage-modal" class="hidden fixed inset-0 z-60 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+      <!-- Modal Header -->
+      <div class="px-6 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <i data-lucide="users" class="w-5 h-5"></i>
+          <h3 class="font-bold text-base">과외·멘토링 학생 관리 (수정 / 삭제)</h3>
+        </div>
+        <button onclick="closeStudentManageModal()" class="text-white/80 hover:text-white transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 overflow-y-auto space-y-4 flex-1">
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div>
+            <h4 class="font-bold text-slate-800 text-sm">등록된 학생 목록</h4>
+            <p class="text-xs text-slate-500">학생의 이름 및 학년/과목을 수정하거나 학생을 삭제할 수 있습니다.</p>
+          </div>
+          <button onclick="promptAddStudent()" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5">
+            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i> 새 학생 등록
+          </button>
+        </div>
+
+        <!-- Student List Container -->
+        <div id="student-manage-list" class="space-y-2.5">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button onclick="closeStudentManageModal()" class="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition">
+          닫기
+        </button>
+      </div>
     </div>
   </div>
 

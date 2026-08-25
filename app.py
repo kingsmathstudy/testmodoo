@@ -56,7 +56,7 @@ def remove_local_file(stored_path: str) -> None:
 # 로컬 DB 초기화
 local_db.init_db()
 
-app = FastAPI(title="TutorMark - 과외/멘토링 사진 과제 첨삭 시스템 (다중 이미지 지원)")
+app = FastAPI(title="모두의 멘토링 책췍 - 사진 과제 첨삭 시스템 (다중 이미지 지원)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -154,10 +154,35 @@ class StudentCreate(BaseModel):
     pin: Optional[str] = "0000"
     avatar_color: Optional[str] = "#3B82F6"
 
+class StudentUpdate(BaseModel):
+    name: str
+    grade: Optional[str] = ""
+
 @app.post("/api/students")
 def add_student(student: StudentCreate):
     student_id = sb.add_student(student.name, student.grade, student.pin, student.avatar_color)
     return {"id": student_id, "message": "학생이 등록되었습니다."}
+
+@app.put("/api/students/{student_id}")
+def update_student(student_id: int, student: StudentUpdate):
+    try:
+        updated = sb.update_student(student_id, student.name, student.grade)
+        return {"id": student_id, "message": "학생 정보가 수정되었습니다.", "student": updated}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"학생 수정 실패: {str(e)}")
+
+@app.delete("/api/students/{student_id}")
+def delete_student(student_id: int):
+    try:
+        res = sb.delete_student(student_id)
+        if isinstance(res, dict):
+            for orig in res.get("original_images", []):
+                remove_local_file(orig)
+            for fb in res.get("feedback_images", []):
+                remove_local_file(fb)
+        return {"id": student_id, "message": "학생이 삭제되었습니다."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"학생 삭제 실패: {str(e)}")
 
 # --- 과제 제출 API (다중 이미지 지원) ---
 @app.get("/api/submissions")

@@ -70,3 +70,99 @@ export async function onRequestPost(context) {
     });
   }
 }
+
+export async function onRequestPut(context) {
+  const url = context.env.SUPABASE_URL;
+  const key = context.env.SUPABASE_KEY;
+
+  if (!url || !key) {
+    return new Response(JSON.stringify({ error: 'Supabase URL or Key not set' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  }
+
+  try {
+    const reqUrl = new URL(context.request.url);
+    const body = await context.request.json();
+    const id = body.id || reqUrl.searchParams.get('id');
+
+    if (!id) {
+      return new Response(JSON.stringify({ error: '학생 ID가 필요합니다.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+
+    const res = await fetch(`${url}/rest/v1/students?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': key,
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({
+        name: body.name,
+        grade: body.grade || ''
+      })
+    });
+
+    const data = await res.json();
+    return new Response(JSON.stringify(Array.isArray(data) ? data[0] : data), {
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  }
+}
+
+export async function onRequestDelete(context) {
+  const url = context.env.SUPABASE_URL;
+  const key = context.env.SUPABASE_KEY;
+
+  if (!url || !key) {
+    return new Response(JSON.stringify({ error: 'Supabase URL or Key not set' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  }
+
+  try {
+    const reqUrl = new URL(context.request.url);
+    let id = reqUrl.searchParams.get('id');
+    if (!id) {
+      try {
+        const body = await context.request.json();
+        id = body.id;
+      } catch (_) {}
+    }
+
+    if (!id) {
+      return new Response(JSON.stringify({ error: '학생 ID가 필요합니다.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+
+    await fetch(`${url}/rest/v1/students?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': key,
+        'Authorization': `Bearer ${key}`
+      }
+    });
+
+    return new Response(JSON.stringify({ success: true, message: '학생이 삭제되었습니다.' }), {
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  }
+}
