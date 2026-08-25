@@ -136,43 +136,28 @@ function renderConnectionBadge() {
 
   const isSupabase = Boolean(state.systemStatus && state.systemStatus.supabase_enabled);
 
+  if (isSupabase) {
+    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span>연동</span>`;
+    badge.className = 'px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center gap-1.5 ' + (state.role === 'teacher' ? 'cursor-pointer hover:bg-emerald-100 transition shadow-xs' : 'cursor-default select-none');
+    badge.title = state.role === 'teacher' ? `Supabase URL: ${state.systemStatus.supabase_url}\n클릭하여 설정을 변경할 수 있습니다.` : '클라우드 연동됨';
+  } else {
+    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span> <span>비연동</span>`;
+    badge.className = 'px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-300 flex items-center gap-1.5 ' + (state.role === 'teacher' ? 'cursor-pointer hover:bg-rose-100 transition shadow-xs' : 'cursor-default select-none');
+    badge.title = state.role === 'teacher' ? '클라우드 미연동 (로컬 모드). 클릭하여 Supabase를 연동하세요.' : '클라우드 비연동';
+  }
+
   if (state.role === 'teacher') {
-    // 교사용 모드: 클릭 시 설정 모달 오픈 및 상세 주소 툴팁 제공
-    if (isSupabase) {
-      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ⚡ Supabase 연동됨 (설정)`;
-      badge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-900/80 text-emerald-300 border border-emerald-700 flex items-center gap-1.5 cursor-pointer hover:bg-emerald-800 transition shadow-xs';
-      badge.title = `Supabase URL: ${state.systemStatus.supabase_url}
-Bucket: ${state.systemStatus.supabase_bucket}
-클릭하여 연동 설정을 변경하거나 해제할 수 있습니다.`;
-    } else {
-      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span> 💾 로컬 모드 (SQLite 설정)`;
-      badge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-900/60 text-amber-300 border border-amber-700 flex items-center gap-1.5 cursor-pointer hover:bg-amber-800 transition shadow-xs';
-      badge.title = '클릭하여 Supabase 연동 키를 입력하고 활성화하세요.';
-    }
     badge.onclick = () => openSupabaseGuideModal();
   } else {
-    // 학생 모드: 민감한 URL/API Key 노출 없이 안전한 읽기 전용 상태 뱃지만 표시
-    if (isSupabase) {
-      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> ⚡ 클라우드 연동됨`;
-      badge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 cursor-default select-none';
-      badge.title = '온라인 클라우드 서버에 안전하게 연결되어 있습니다.';
-    } else {
-      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> 💾 로컬 서버 연결됨`;
-      badge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5 cursor-default select-none';
-      badge.title = '로컬 과외 서버에 연결되어 있습니다.';
-    }
     badge.onclick = null;
   }
 }
 
 /** A cold Supabase connection can take several seconds - don't leave the page blank. */
 function showLoadingPlaceholders() {
-  const chips = document.getElementById('student-chips-container');
-  if (chips && !chips.innerHTML.trim()) {
-    chips.innerHTML = `
-      <span class="px-3.5 py-2 rounded-xl text-sm text-slate-400 bg-slate-100 border border-slate-200 animate-pulse">
-        학생 목록 불러오는 중...
-      </span>`;
+  const dropdown = document.getElementById('student-select-dropdown');
+  if (dropdown && !dropdown.options.length) {
+    dropdown.innerHTML = `<option value="">학생 목록 불러오는 중...</option>`;
   }
 
   ['student-submissions-list', 'teacher-submissions-list'].forEach(id => {
@@ -323,8 +308,10 @@ function switchRole(role) {
 
     studentView.classList.remove('hidden');
     teacherView.classList.add('hidden');
-    roleBadge.innerText = '학생 모드';
-    roleBadge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800';
+    if (roleBadge) {
+      roleBadge.innerText = '학생 모드';
+      roleBadge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800';
+    }
 
     renderConnectionBadge();
     loadSubmissions();
@@ -336,8 +323,10 @@ function switchRole(role) {
 
     teacherView.classList.remove('hidden');
     studentView.classList.add('hidden');
-    roleBadge.innerText = '교사/관리자 모드';
-    roleBadge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800';
+    if (roleBadge) {
+      roleBadge.innerText = '교사 모드';
+      roleBadge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800';
+    }
 
     renderConnectionBadge();
     loadStats();
@@ -427,30 +416,35 @@ async function loadStudents() {
 }
 
 function renderStudentSelectUI() {
-  const container = document.getElementById('student-chips-container');
-  if (!container) return;
+  const dropdown = document.getElementById('student-select-dropdown');
+  if (!dropdown) return;
 
   if (state.students.length === 0) {
-    container.innerHTML = `
-      <span class="px-3.5 py-2 rounded-xl text-sm text-slate-400 bg-slate-50 border border-dashed border-slate-200">
-        등록된 학생이 없습니다. [학생 추가]를 눌러주세요.
-      </span>`;
+    dropdown.innerHTML = `<option value="">등록된 학생 없음 (교사 모드에서 등록)</option>`;
     return;
   }
 
-  container.innerHTML = state.students.map(s => `
-    <button type="button" 
-      onclick="selectStudent(${s.id})"
-      class="student-chip px-3.5 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 border ${
-        state.currentStudent && state.currentStudent.id === s.id
-          ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-sm ring-2 ring-blue-400/20'
-          : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-      }">
-      <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${s.avatar_color}"></span>
-      <span>${escapeHtml(s.name)}</span>
-      <span class="text-xs text-gray-400 font-normal">(${escapeHtml(s.grade || '')})</span>
-    </button>
+  dropdown.innerHTML = state.students.map(s => `
+    <option value="${s.id}" ${state.currentStudent && state.currentStudent.id === s.id ? 'selected' : ''}>
+      ${escapeHtml(s.name)}${s.grade ? ` (${escapeHtml(s.grade)})` : ''}
+    </option>
   `).join('');
+
+  if (state.currentStudent) {
+    dropdown.value = String(state.currentStudent.id);
+  } else if (state.students.length > 0) {
+    state.currentStudent = state.students[0];
+    dropdown.value = String(state.students[0].id);
+  }
+}
+
+function handleStudentDropdownChange(studentIdStr) {
+  const id = Number(studentIdStr);
+  const found = state.students.find(s => s.id === id);
+  if (found) {
+    state.currentStudent = found;
+    loadSubmissions();
+  }
 }
 
 function renderStudentFilterUI() {
@@ -938,14 +932,14 @@ async function handleSubmissionSubmit(e) {
     return;
   }
 
-  const subject = document.getElementById('submission-subject').value;
-  const title = document.getElementById('submission-title').value.trim();
-  const memo = document.getElementById('submission-memo').value.trim();
+  const subjectElem = document.getElementById('submission-subject');
+  const subject = subjectElem ? subjectElem.value : '과제';
+  const titleInput = document.getElementById('submission-title')?.value.trim();
+  const memo = document.getElementById('submission-memo')?.value.trim() || '';
 
-  if (!title) {
-    showToast('과제 제목(예: 수학 익힘책 42p)을 입력해주세요.', 'error');
-    return;
-  }
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const title = titleInput || `${state.currentStudent.name} 과제 (${dateStr})`;
 
   const submitBtn = document.getElementById('btn-submit-work');
   submitBtn.disabled = true;
