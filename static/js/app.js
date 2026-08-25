@@ -181,17 +181,25 @@ function initUI() {
     if (zoomText) zoomText.innerText = `${zoomPercent}%`;
   };
 
-  // Setup Role Buttons
-  document.getElementById('btn-mode-student').addEventListener('click', () => switchRole('student'));
-  document.getElementById('btn-mode-teacher').addEventListener('click', () => {
-    if (state.role === 'teacher') return;
-    if (state.teacherUnlocked) {
-      switchRole('teacher');
-      showToast('교사 모드로 전환되었습니다.', 'info');
-    } else {
-      promptTeacherPin();
-    }
-  });
+  // Setup Role Switcher (Compact Dropdown)
+  const roleSelect = document.getElementById('header-role-select');
+  if (roleSelect) {
+    roleSelect.value = state.role;
+  }
+  const studentBtn = document.getElementById('btn-mode-student');
+  if (studentBtn) studentBtn.addEventListener('click', () => switchRole('student'));
+  const teacherBtn = document.getElementById('btn-mode-teacher');
+  if (teacherBtn) {
+    teacherBtn.addEventListener('click', () => {
+      if (state.role === 'teacher') return;
+      if (state.teacherUnlocked) {
+        switchRole('teacher');
+        showToast('교사 모드로 전환되었습니다.', 'info');
+      } else {
+        promptTeacherPin();
+      }
+    });
+  }
 
   // Setup Multi-Photo Inputs
   const photoInput = document.getElementById('student-photo-input');
@@ -301,17 +309,35 @@ function getActiveSubmissionImages() {
 }
 
 // --- Role Management ---
+function handleRoleSelectChange(role) {
+  if (role === 'teacher') {
+    if (state.teacherUnlocked) {
+      switchRole('teacher');
+      showToast('교사 모드로 전환되었습니다.', 'info');
+    } else {
+      promptTeacherPin();
+    }
+  } else {
+    switchRole('student');
+  }
+}
+
 function switchRole(role) {
   state.role = role;
+  const roleSelect = document.getElementById('header-role-select');
   const studentBtn = document.getElementById('btn-mode-student');
   const teacherBtn = document.getElementById('btn-mode-teacher');
   const studentView = document.getElementById('student-view');
   const teacherView = document.getElementById('teacher-view');
   const roleBadge = document.getElementById('current-role-badge');
 
+  if (roleSelect) {
+    roleSelect.value = role;
+  }
+
   if (role === 'student') {
-    studentBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 bg-blue-600 text-white shadow-xs';
-    teacherBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 text-slate-600 hover:text-slate-900';
+    if (studentBtn) studentBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 bg-blue-600 text-white shadow-xs';
+    if (teacherBtn) teacherBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 text-slate-600 hover:text-slate-900';
 
     studentView.classList.remove('hidden');
     teacherView.classList.add('hidden');
@@ -323,8 +349,8 @@ function switchRole(role) {
     renderConnectionBadge();
     loadSubmissions();
   } else {
-    teacherBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 bg-purple-600 text-white shadow-xs';
-    studentBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 text-slate-600 hover:text-slate-900';
+    if (teacherBtn) teacherBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 bg-purple-600 text-white shadow-xs';
+    if (studentBtn) studentBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 text-slate-600 hover:text-slate-900';
 
     teacherView.classList.remove('hidden');
     studentView.classList.add('hidden');
@@ -348,7 +374,11 @@ function promptTeacherPin() {
   if (state.role === 'teacher') return;
   
   const pin = prompt('교사 모드 접속 PIN 번호를 입력하세요 (기본: 1234):', '1234');
-  if (pin === null) return;
+  if (pin === null) {
+    const roleSelect = document.getElementById('header-role-select');
+    if (roleSelect) roleSelect.value = state.role;
+    return;
+  }
 
   fetch('/api/teacher/verify-pin', {
     method: 'POST',
@@ -362,6 +392,8 @@ function promptTeacherPin() {
       switchRole('teacher');
       showToast('교사 모드로 전환되었습니다.', 'success');
     } else {
+      const roleSelect = document.getElementById('header-role-select');
+      if (roleSelect) roleSelect.value = state.role;
       showToast(data.message || '비밀번호가 올바르지 않습니다.', 'error');
     }
   })
@@ -372,6 +404,8 @@ function promptTeacherPin() {
       switchRole('teacher');
       showToast('교사 모드로 전환되었습니다.', 'success');
     } else {
+      const roleSelect = document.getElementById('header-role-select');
+      if (roleSelect) roleSelect.value = state.role;
       showToast('비밀번호가 올바르지 않습니다. (기본: 1234)', 'error');
     }
   });

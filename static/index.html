@@ -37,17 +37,12 @@
               <span>확인 중</span>
             </div>
 
-            <!-- Role Mode Switcher Buttons ('연동' 바로 우측 위치) -->
-            <div class="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 ml-1">
-              <button id="btn-mode-student" class="px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 bg-blue-600 text-white shadow-xs">
-                <i data-lucide="user" class="w-3.5 h-3.5"></i>
-                <span>학생</span>
-              </button>
-              <button id="btn-mode-teacher" class="px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 text-slate-600 hover:text-slate-900">
-                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-                <span>교사</span>
-              </button>
-            </div>
+            <!-- Role Mode Selector (연동 오른쪽, 단일 드롭다운 1개) -->
+            <select id="header-role-select" onchange="handleRoleSelectChange(this.value)"
+                    class="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-2 py-0.5 ml-1 focus:ring-1 focus:ring-blue-500 focus:outline-none cursor-pointer">
+              <option value="student">학생</option>
+              <option value="teacher">교사</option>
+            </select>
           </div>
           <p class="text-xs text-slate-500 mt-0.5">사진 과제 & 실시간 첨삭 체크</p>
         </div>
