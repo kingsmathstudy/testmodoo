@@ -134,18 +134,35 @@ function renderConnectionBadge() {
   const badge = document.getElementById('supabase-status-badge');
   if (!badge) return;
 
-  if (state.systemStatus && state.systemStatus.supabase_enabled) {
-    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ⚡ Supabase DB & Storage 연동됨`;
-    badge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-900/80 text-emerald-300 border border-emerald-700 flex items-center gap-1.5 cursor-pointer hover:bg-emerald-800 transition';
-    badge.title = `Supabase URL: ${state.systemStatus.supabase_url}
+  const isSupabase = Boolean(state.systemStatus && state.systemStatus.supabase_enabled);
+
+  if (state.role === 'teacher') {
+    // 교사용 모드: 클릭 시 설정 모달 오픈 및 상세 주소 툴팁 제공
+    if (isSupabase) {
+      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> ⚡ Supabase 연동됨 (설정)`;
+      badge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-900/80 text-emerald-300 border border-emerald-700 flex items-center gap-1.5 cursor-pointer hover:bg-emerald-800 transition shadow-xs';
+      badge.title = `Supabase URL: ${state.systemStatus.supabase_url}
 Bucket: ${state.systemStatus.supabase_bucket}
-클릭하여 설정을 변경할 수 있습니다.`;
+클릭하여 연동 설정을 변경하거나 해제할 수 있습니다.`;
+    } else {
+      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span> 💾 로컬 모드 (SQLite 설정)`;
+      badge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-900/60 text-amber-300 border border-amber-700 flex items-center gap-1.5 cursor-pointer hover:bg-amber-800 transition shadow-xs';
+      badge.title = '클릭하여 Supabase 연동 키를 입력하고 활성화하세요.';
+    }
+    badge.onclick = () => openSupabaseGuideModal();
   } else {
-    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span> 💾 로컬 모드 (SQLite)`;
-    badge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-900/60 text-amber-300 border border-amber-700 flex items-center gap-1.5 cursor-pointer hover:bg-amber-800 transition';
-    badge.title = '클릭하여 Supabase 연동 키를 입력하고 활성화하세요.';
+    // 학생 모드: 민감한 URL/API Key 노출 없이 안전한 읽기 전용 상태 뱃지만 표시
+    if (isSupabase) {
+      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> ⚡ 클라우드 연동됨`;
+      badge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5 cursor-default select-none';
+      badge.title = '온라인 클라우드 서버에 안전하게 연결되어 있습니다.';
+    } else {
+      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> 💾 로컬 서버 연결됨`;
+      badge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5 cursor-default select-none';
+      badge.title = '로컬 과외 서버에 연결되어 있습니다.';
+    }
+    badge.onclick = null;
   }
-  badge.onclick = () => openSupabaseGuideModal();
 }
 
 /** A cold Supabase connection can take several seconds - don't leave the page blank. */
@@ -307,6 +324,7 @@ function switchRole(role) {
     roleBadge.innerText = '학생 모드';
     roleBadge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800';
 
+    renderConnectionBadge();
     loadSubmissions();
   } else {
     teacherBtn.classList.add('bg-purple-600', 'text-white', 'shadow-md');
@@ -319,6 +337,7 @@ function switchRole(role) {
     roleBadge.innerText = '교사/관리자 모드';
     roleBadge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800';
 
+    renderConnectionBadge();
     loadStats();
     loadSubmissions();
   }
@@ -795,6 +814,65 @@ function removeSelectedPhoto(index) {
   renderPhotoThumbnails();
 }
 
+// Must stay in step with optimize_image_bytes() in app.py
+const UPLOAD_MAX_DIMENSION = 2000;   // 긴 변 기준
+const UPLOAD_WEBP_QUALITY = 0.70;
+
+/**
+ * Downscales a photo to 2000px on its longest side and re-encodes it as WebP.
+ * Returns null when the browser cannot decode the file (HEIC outside Safari) or
+ * when the result would be no smaller, so the caller can upload the original.
+ */
+async function optimizePhotoForUpload(file) {
+  let bitmap = null;
+  try {
+    // 'from-image' applies the EXIF rotation, matching ImageOps.exif_transpose() on the server
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch (err) {
+    try {
+      bitmap = await createImageBitmap(file);
+    } catch (err2) {
+      console.warn('브라우저가 이 사진을 디코딩하지 못했습니다. 원본으로 업로드합니다:', file.name);
+      return null;
+    }
+  }
+
+  try {
+    const scale = Math.min(1, UPLOAD_MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, 0, 0, w, h);
+
+    const blob = await new Promise(resolve =>
+      canvas.toBlob(resolve, 'image/webp', UPLOAD_WEBP_QUALITY));
+
+    // An engine without WebP encoding silently hands back a PNG, which is bigger
+    if (!blob || blob.type !== 'image/webp') return null;
+    if (blob.size >= file.size && scale === 1) return null;
+    return blob;
+  } finally {
+    if (bitmap.close) bitmap.close();
+  }
+}
+
+/** Picks a safe file extension for a stored image. */
+function extensionForMime(mime, fallbackName) {
+  if (mime === 'image/webp') return 'webp';
+  if (mime === 'image/png') return 'png';
+  if (mime === 'image/jpeg') return 'jpg';
+  const dot = (fallbackName || '').lastIndexOf('.');
+  const raw = dot > -1 ? fallbackName.slice(dot + 1).toLowerCase() : '';
+  const clean = raw.replace(/[^a-z0-9]/g, '');
+  return clean || 'jpg';
+}
+
 function base64ToBlob(dataUrl) {
   const arr = dataUrl.split(',');
   const mime = arr[0].match(/:(.*?);/)[1];
@@ -878,12 +956,18 @@ async function handleSubmissionSubmit(e) {
 
       for (let i = 0; i < state.selectedPhotoFiles.length; i++) {
         const file = state.selectedPhotoFiles[i];
-        const ext = file.name.split('.').pop() || 'jpg';
+
+        submitBtn.innerHTML = `<span class="inline-block animate-spin mr-2">⏳</span> 사진 최적화 중... (${i + 1}/${state.selectedPhotoFiles.length})`;
+        const optimized = await optimizePhotoForUpload(file);
+
+        const payload = optimized || file;
+        const contentType = optimized ? 'image/webp' : (file.type || 'image/jpeg');
+        const ext = extensionForMime(contentType, file.name);
         const filename = `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_p${i + 1}.${ext}`;
 
         const { data: uploadData, error: uploadErr } = await state.supabaseClient.storage
           .from(bucket)
-          .upload(filename, file, { contentType: file.type || 'image/jpeg', upsert: true });
+          .upload(filename, payload, { contentType: contentType, upsert: true });
 
         if (uploadErr) throw new Error('사진 저장 실패: ' + uploadErr.message);
 
@@ -1299,11 +1383,14 @@ async function handleSaveFeedback() {
     if (state.supabaseClient) {
       const bucket = state.systemStatus?.supabase_bucket || window.SUPABASE_CONFIG?.bucket || 'tutormark-files';
       const blob = base64ToBlob(exported.dataUrl);
-      const filename = `fb_${state.activeAnnotatingSubmission.id}_p${state.activePageIndex + 1}_${Date.now()}.jpg`;
+      // Take the type from the blob itself: the canvas falls back to PNG where WebP encoding is missing
+      const contentType = blob.type || 'image/webp';
+      const ext = extensionForMime(contentType, '');
+      const filename = `fb_${state.activeAnnotatingSubmission.id}_p${state.activePageIndex + 1}_${Date.now()}.${ext}`;
 
       const { data: uploadData, error: uploadErr } = await state.supabaseClient.storage
         .from(bucket)
-        .upload(filename, blob, { contentType: 'image/jpeg', upsert: true });
+        .upload(filename, blob, { contentType: contentType, upsert: true });
 
       if (uploadErr) throw new Error('첨삭본 이미지 저장 실패: ' + uploadErr.message);
 
@@ -1730,6 +1817,11 @@ async function promptAddStudent() {
 
 // --- Supabase Connection Manager Modal ---
 function openSupabaseGuideModal() {
+  if (state.role !== 'teacher') {
+    showToast('Supabase 연동 설정은 교사/관리자 모드에서만 접근할 수 있습니다.', 'warning');
+    return;
+  }
+
   const modal = document.getElementById('supabase-guide-modal');
   if (!modal) return;
 

@@ -28,12 +28,9 @@ except Exception as e:
 
 # 3. Test storage bucket
 try:
-    buckets = client.storage.list_buckets()
-    bucket_names = [b.name for b in buckets]
-    print(f"Existing storage buckets: {bucket_names}")
-    if SUPABASE_BUCKET in bucket_names:
-        print(f"[OK] Storage bucket '{SUPABASE_BUCKET}' is ready!")
-    else:
-        print(f"[NOTICE] Bucket '{SUPABASE_BUCKET}' not found in: {bucket_names}")
+    test_file_name = "__conn_test__.txt"
+    client.storage.from_(SUPABASE_BUCKET).upload(test_file_name, b"test_ok", {"content-type": "text/plain", "upsert": "true"})
+    client.storage.from_(SUPABASE_BUCKET).remove([test_file_name])
+    print(f"[OK] Storage bucket '{SUPABASE_BUCKET}' read/write is working perfectly!")
 except Exception as e:
     print(f"[NOTICE] Storage bucket check: {e}")
