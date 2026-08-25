@@ -392,7 +392,7 @@ TEACHER_PINS = [
 def verify_teacher_pin(data: PinVerify):
     if data.pin.strip() in TEACHER_PINS:
         return {"success": True}
-    return {"success": False, "message": "비밀번호가 일치하지 않습니다. (기본: 1234)"}
+    return {"success": False, "message": "선생님 비밀번호가 일치하지 않습니다."}
 
 if __name__ == "__main__":
     import uvicorn

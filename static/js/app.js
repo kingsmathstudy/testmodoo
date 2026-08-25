@@ -368,13 +368,10 @@ function switchRole(role) {
   if (window.lucide) lucide.createIcons();
 }
 
-// Used only when the verify-pin endpoint is unreachable (e.g. static Cloudflare Pages hosting)
-const LOCAL_TEACHER_PINS = ['1234', '0000', 'admin'];
-
 function promptTeacherPin() {
   if (state.role === 'teacher') return;
   
-  const pin = prompt('교사 모드 접속 PIN 번호를 입력하세요 (기본: 1234):', '1234');
+  const pin = prompt('선생님 모드 접속 비밀번호(PIN)를 입력하세요:');
   if (pin === null) {
     const roleSelect = document.getElementById('header-role-select');
     if (roleSelect) roleSelect.value = state.role;
@@ -395,19 +392,19 @@ function promptTeacherPin() {
     } else {
       const roleSelect = document.getElementById('header-role-select');
       if (roleSelect) roleSelect.value = state.role;
-      showToast(data.message || '비밀번호가 올바르지 않습니다.', 'error');
+      showToast(data.message || '선생님 비밀번호가 일치하지 않습니다.', 'error');
     }
   })
   .catch(() => {
-    // No backend (static hosting): fall back to a local check instead of granting access outright
-    if (LOCAL_TEACHER_PINS.includes(pin.trim())) {
+    // Local offline fallback
+    if (pin.trim() === '1234' || pin.trim() === 'admin') {
       state.teacherUnlocked = true;
       switchRole('teacher');
       showToast('교사 모드로 전환되었습니다.', 'success');
     } else {
       const roleSelect = document.getElementById('header-role-select');
       if (roleSelect) roleSelect.value = state.role;
-      showToast('비밀번호가 올바르지 않습니다. (기본: 1234)', 'error');
+      showToast('선생님 비밀번호가 일치하지 않습니다.', 'error');
     }
   });
 }
