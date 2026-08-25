@@ -5,6 +5,7 @@
 // Application State
 const state = {
   role: 'student', // 'student' or 'teacher'
+  teacherUnlocked: false, // true once PIN verified
   students: [],
   currentStudent: null,
   submissions: [],
@@ -182,7 +183,15 @@ function initUI() {
 
   // Setup Role Buttons
   document.getElementById('btn-mode-student').addEventListener('click', () => switchRole('student'));
-  document.getElementById('btn-mode-teacher').addEventListener('click', () => promptTeacherPin());
+  document.getElementById('btn-mode-teacher').addEventListener('click', () => {
+    if (state.role === 'teacher') return;
+    if (state.teacherUnlocked) {
+      switchRole('teacher');
+      showToast('교사 모드로 전환되었습니다.', 'info');
+    } else {
+      promptTeacherPin();
+    }
+  });
 
   // Setup Multi-Photo Inputs
   const photoInput = document.getElementById('student-photo-input');
@@ -301,30 +310,26 @@ function switchRole(role) {
   const roleBadge = document.getElementById('current-role-badge');
 
   if (role === 'student') {
-    studentBtn.classList.add('bg-blue-600', 'text-white', 'shadow-md');
-    studentBtn.classList.remove('bg-gray-100', 'text-gray-700');
-    teacherBtn.classList.add('bg-gray-100', 'text-gray-700');
-    teacherBtn.classList.remove('bg-purple-600', 'text-white', 'shadow-md');
+    studentBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 bg-blue-600 text-white shadow-xs';
+    teacherBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 text-slate-600 hover:text-slate-900';
 
     studentView.classList.remove('hidden');
     teacherView.classList.add('hidden');
     if (roleBadge) {
-      roleBadge.innerText = '학생 모드';
+      roleBadge.innerText = '학생';
       roleBadge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800';
     }
 
     renderConnectionBadge();
     loadSubmissions();
   } else {
-    teacherBtn.classList.add('bg-purple-600', 'text-white', 'shadow-md');
-    teacherBtn.classList.remove('bg-gray-100', 'text-gray-700');
-    studentBtn.classList.add('bg-gray-100', 'text-gray-700');
-    studentBtn.classList.remove('bg-blue-600', 'text-white', 'shadow-md');
+    teacherBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 bg-purple-600 text-white shadow-xs';
+    studentBtn.className = 'px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 text-slate-600 hover:text-slate-900';
 
     teacherView.classList.remove('hidden');
     studentView.classList.add('hidden');
     if (roleBadge) {
-      roleBadge.innerText = '교사 모드';
+      roleBadge.innerText = '교사';
       roleBadge.className = 'px-2.5 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-800';
     }
 
@@ -342,7 +347,7 @@ const LOCAL_TEACHER_PINS = ['1234', '0000', 'admin'];
 function promptTeacherPin() {
   if (state.role === 'teacher') return;
   
-  const pin = prompt('교사/관리자 모드 접속 PIN 번호를 입력하세요 (기본: 1234):', '1234');
+  const pin = prompt('교사 모드 접속 PIN 번호를 입력하세요 (기본: 1234):', '1234');
   if (pin === null) return;
 
   fetch('/api/teacher/verify-pin', {
@@ -353,8 +358,9 @@ function promptTeacherPin() {
   .then(res => res.json())
   .then(data => {
     if (data.success) {
+      state.teacherUnlocked = true;
       switchRole('teacher');
-      showToast('선생님 모드로 전환되었습니다.', 'success');
+      showToast('교사 모드로 전환되었습니다.', 'success');
     } else {
       showToast(data.message || '비밀번호가 올바르지 않습니다.', 'error');
     }
@@ -362,8 +368,9 @@ function promptTeacherPin() {
   .catch(() => {
     // No backend (static hosting): fall back to a local check instead of granting access outright
     if (LOCAL_TEACHER_PINS.includes(pin.trim())) {
+      state.teacherUnlocked = true;
       switchRole('teacher');
-      showToast('선생님 모드로 전환되었습니다.', 'success');
+      showToast('교사 모드로 전환되었습니다.', 'success');
     } else {
       showToast('비밀번호가 올바르지 않습니다. (기본: 1234)', 'error');
     }
