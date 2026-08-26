@@ -8,7 +8,7 @@
 //       모든 과제/첨삭을 읽고 쓰고 지울 수 있습니다. 공개 배포 시에는 RLS를 반드시 강화하세요.
 //     - 백엔드(app.py)를 함께 띄우는 경우, 서버가 응답하면 이 값은 무시되고 서버 설정이 우선합니다.
 window.SUPABASE_CONFIG = {
-  url: "https://vevugqqlhzvzgicptugi.supabase.co",
-  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZldnVncXFsaHp2emdpY3B0dWdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2MTc0MDQsImV4cCI6MjEwMzE5MzQwNH0.9zMxHQCgeL43Wsr5913ENpLMGLcr33yJTpa3iE97jaE",
+  url: "",
+  anonKey: "",
   bucket: "tutormark-files"
 };
